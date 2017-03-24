@@ -1,1 +1,1 @@
-# DataScience
+# basic machine learning model
