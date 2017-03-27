@@ -19,5 +19,8 @@ class Solution(object):
         
         #pythonic way
         return ''.join([s[-(i+1)] for i in range(len(s))])
+        #cleaenr way
+        return ''.join(reversed(s))
         #second way: Extened Slices
         return s[::-1]
+        
