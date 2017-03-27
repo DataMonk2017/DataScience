@@ -1,0 +1,45 @@
+# Notes for bit operation
+Bit operation is the same fast as +, -.
+but bit operation is faster than multiplication/division.
+
+bit operation:
+<<
+>>
+&
+|
+~
+
+examples:
+3&5     & Binary AND
+the binary representation of 3 is 011
+the binary representation of 5 is 101
+the binary representation of 3&5 is 1
+so 3&5 is 1.
+
+tricks of &. X&0 for any numebr X. The last digit of binary representation is always 0.
+
+
+4|7     | Binary OR
+the binary representation of 4 is 100
+the binary representation of 7 is 111
+the binary representation of 4|7 is 111
+so 4|7 is 7.
+
+tricks of |. X|1 for any numebr X. The last digit of binary representation is always 1.
+
+2^5     ^ Binary XOR
+the binary representation of 2 is 10
+the binary representation of 5 is 101
+the binary representation of 2^5 is 111
+so 2^5 is 7.
+
+~3      ~ Binary Ones Complement
+~3 = -(11+1) in binary = -(100) in binary = -4
+
+
+3<<2    << Binary Left Shift
+3 = 11<<2 = 1100 =12
+
+3>>2    >> Binary Right Shift
+3>>2 = 11>>2 = 0
+10>>1 = 1010>>1 = 101 =5
