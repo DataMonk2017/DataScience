@@ -1,16 +1,11 @@
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Programming HW 7: EM Mixture of Gaussians
-Professor Gildea
-
-jzheng8@u.rochester.edu
-CSC 446
-Student ID: 27584149
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Homework:
 
 The objective of the homework was to implement EM fitting of a mixture of gaussians on a two-dimensional dataset using Python. 
 
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Files:
 
 hw7.py		-Contains EM Gaussian Mixture procedures and call method,including graphing procedure
@@ -19,7 +14,7 @@ hw7.py		-Contains EM Gaussian Mixture procedures and call method,including graph
 	
 
 (The graphing procedure uses the matplotlib python library, which does not work on the cycle machines. 
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Algorithm:
 
 The mix.py file contains all of the procedures for the EM mixture of gaussians model. 
@@ -43,21 +38,21 @@ Log Likelihood:
 The log likelihood value is calculated as follows:
 ln(p(X|mu,sigma,lambda) = ( from 1 to N sum(ln( from 1 to k sum(( from 1 to k sum(lambda[j] * N(X(n)|mu(j),sigma(j)) ) )) )) )
 
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Instructions: (Run the following command in terminal).
 
 The second command line argument should be file name.
-The second command line argument should be either ‘tied’ or ‘separate’ indicating what kind of covariance matrices you would like to be used. 
+The second command line argument should be either â€˜tiedâ€™ or â€˜separateâ€™ indicating what kind of covariance matrices you would like to be used. 
 The thrid command line argument should be an integer value indicating how many gaussians you would like to have in your mixture.
 For instance:
 
 python hw7.py points.dat tied 10
-(This will run the program on a ‘tied’ covariance matrix, for a mixture of 10 gaussians).
+(This will run the program on a â€˜tiedâ€™ covariance matrix, for a mixture of 10 gaussians).
 
 python hw7.py points.dat separate 5
-(This will run the program on ‘separate’ covariance matrices, for a mixture of 5 gaussians).
+(This will run the program on â€˜separateâ€™ covariance matrices, for a mixture of 5 gaussians).
 
-——————————————————————————————
+â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”â€”
 Output: 
 
 performace plot for train set 
