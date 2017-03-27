@@ -1,0 +1,909 @@
+Timing is on.
+Border style is 2.
+--Jianyuan Zheng
+-- Show time needed to execute each command 
+\timing on 
+Timing is on.
+
+-- Make the output of relations look slightly nicer 
+\pset border 2 
+Border style is 2.
+
+-- Echo all input taken from a script file 
+-- using the \i command or the --file=... command line option 
+\set ECHO all
+
+
+--crsdb-create-jzheng8.sql
+
+
+
+
+--revise age to DOB (Date of birth) in order to reduce the updating of database 
+
+DROP TABLE IF EXISTS member CASCADE;
+DROP TABLE
+Time: 9.522 ms
+DROP TABLE IF EXISTS court_schedule CASCADE;
+DROP TABLE
+Time: 4.150 ms
+DROP TABLE IF EXISTS pardon_history CASCADE;
+DROP TABLE
+Time: 2.174 ms
+DROP TABLE IF EXISTS court CASCADE;
+DROP TABLE
+Time: 8.784 ms
+DROP TABLE IF EXISTS reservation CASCADE;
+DROP TABLE
+Time: 4.825 ms
+
+
+---create schema
+CREATE TABLE member(name VARCHAR(40) Not NULL CHECK (name <> ''),
+member_id serial PRIMARY KEY,
+gender VARCHAR(4) CONSTRAINT gender_match CHECK(gender in ('F','M','T','','NULL')),
+DOB	DATE CONSTRAINT correct_date CHECK (DOB<now()::date ), 
+penalty_points INT DEFAULT 0 CONSTRAINT postitve_penatlty_points CHECK ( penalty_points >=0)
+);
+CREATE TABLE
+Time: 183.967 ms
+
+CREATE TABLE pardon_history(
+member_id INT references member(member_id) NOT NULL,
+pardoned_date TIMESTAMP  NOT NULL,
+PRIMARY KEY (member_id,pardoned_date)
+);
+CREATE TABLE
+Time: 8.949 ms
+
+CREATE TABLE court(
+court_id serial PRIMARY KEY ,
+court_location VARCHAR NOT NULL,
+court_name VARCHAR NOT NULL,
+CONSTRAINT unique_court Unique(court_location,court_name)
+);
+CREATE TABLE
+Time: 34.799 ms
+
+CREATE TABLE reservation(
+reservation_id serial PRIMARY KEY ,
+booking_date TIMESTAMP NOT NULL,
+play_time TIMESTAMP CONSTRAINT correct_date CHECK(play_time>=booking_date) NOT NULL  ,
+member_id INT references member(member_id) ON DELETE CASCADE ON UPDATE CASCADE,
+booking_status VARCHAR NOT NULL DEFAULT 'pending',
+reserved_court INT references court(court_id) NOT NULL
+);
+CREATE TABLE
+Time: 19.189 ms
+
+CREATE TABLE court_schedule(
+court_id INT references court(court_id)  ON DELETE CASCADE ON UPDATE CASCADE,
+time_slot TIMESTAMP,
+RID INT references reservation(reservation_id) ON DELETE CASCADE ON UPDATE CASCADE,
+PRIMARY KEY(court_id,time_slot,RID)
+);
+CREATE TABLE
+Time: 19.494 ms
+
+
+--create trigger
+--update booking status default pending
+ 
+CREATE OR REPLACE FUNCTION check_court()
+  RETURNS trigger AS 
+$BODY$
+	BEGIN
+		IF NEW.play_time > now()::date+(7-(SELECT member.penalty_points FROM member WHERE member.member_id = NEW.member_id))
+		THEN NEW.booking_status :='unavailable';
+		RETURN NEW;
+		END IF;
+		IF (SELECT count(*) FROM (SELECT * FROM court_schedule where  court_schedule.court_id=New.reserved_court)as foo
+		WHERE NEW.play_time between foo.time_slot and foo.time_slot + interval '1 hour' )>=1 THEN 
+			NEW.booking_status :='unavailable';
+			RETURN NEW;
+		ELSE NEW.booking_status :='accepted';
+		RETURN NEW;
+		END IF;
+		
+		
+
+	END 
+$BODY$
+	LANGUAGE plpgsql;
+CREATE FUNCTION
+Time: 4.811 ms
+
+	
+DROP TRIGGER IF EXISTS status_update1 ON reservation;
+DROP TRIGGER
+Time: 0.288 ms
+CREATE TRIGGER status_update1
+	BEFORE INSERT ON reservation
+	FOR EACH ROW
+		EXECUTE PROCEDURE check_court();
+CREATE TRIGGER
+Time: 1.717 ms
+		
+---update booking status default accept
+CREATE OR REPLACE FUNCTION status_accept()
+  RETURNS trigger AS 
+$BODY$
+	BEGIN
+		IF NEW.booking_status ='accepted' THEN
+			INSERT INTO court_schedule(court_id,time_slot,RID)
+			SELECT NEW.reserved_court,NEW.play_time,NEW.reservation_id 
+			Where NEW.reserved_court not in (SELECT court_id FROM court_schedule)
+			and NEW.play_time not in (SELECT time_slot FROM court_schedule)
+			and NEW.reservation_id not in (SELECT RID FROM court_schedule);	
+		END IF;
+		RETURN NEW;
+	END 
+$BODY$
+	LANGUAGE plpgsql;
+CREATE FUNCTION
+Time: 1.693 ms
+	
+DROP TRIGGER IF EXISTS status_update2 ON reservation;
+DROP TRIGGER
+Time: 0.260 ms
+CREATE TRIGGER status_update2
+	AFTER INSERT ON reservation
+	FOR EACH ROW
+		EXECUTE PROCEDURE status_accept();
+CREATE TRIGGER
+Time: 1.431 ms
+
+
+---run the procedure when the status 'dropped', 'confirmed' or 'cancelled'
+CREATE OR REPLACE FUNCTION set_status()
+  RETURNS trigger AS 
+$BODY$
+	BEGIN
+		IF NEW.booking_status='dropped' THEN 
+			DELETE FROM pardon_history WHERE pardoned_date<now()::date-42; --6 weeks
+			INSERT INTO pardon_history(member_id,pardoned_date) 
+			SELECT NEW.member_id,NEW.play_time
+			WHERE NEW.member_id not in (SELECT member_id FROM pardon_history) 
+			and NEW.play_time not in (SELECT pardoned_date FROM pardon_history);
+			UPDATE member 
+			SET penalty_points=(SELECT COUNT(*) FROM pardon_history AS A GROUP BY A.member_id)
+			WHERE member.member_id=NEW.member_id;
+			DELETE FROM court_schedule WHERE New.reservation_id=court_schedule.RID and 
+			NEW.reserved_court=court_schedule.court_id;
+		END IF;
+		IF NEW.booking_status='confirmed' THEN
+			--status_change to confirmed 
+			INSERT INTO court_schedule(court_id,time_slot,RID)
+			SELECT NEW.reserved_court,NEW.play_time,NEW.reservation_id 
+			Where NEW.reserved_court not in (SELECT court_id FROM court_schedule)
+			and NEW.play_time not in (SELECT time_slot FROM court_schedule)
+			and NEW.reservation_id not in (SELECT RID FROM court_schedule);	
+
+		END IF;
+		IF NEW.booking_status='cancelled' THEN
+			--status_change to confirmed 
+			--record of cancelled reservation would be still kept
+			DELETE FROM court_schedule
+			WHERE court_schedule.court_id=NEW.reserved_court
+			and court_schedule.time_slot=NEW.play_time
+			and court_schedule.RID=NEW.reservation_id ;
+		END IF;
+		RETURN NULL;
+
+
+	END;
+$BODY$
+	LANGUAGE plpgsql;	
+CREATE FUNCTION
+Time: 2.204 ms
+
+
+		
+DROP TRIGGER IF EXISTS status_update3 ON reservation;
+DROP TRIGGER
+Time: 0.294 ms
+
+CREATE TRIGGER status_update3
+	AFTER UPDATE ON reservation
+	FOR EACH ROW
+		EXECUTE PROCEDURE set_status();
+CREATE TRIGGER
+Time: 2.240 ms
+--before update the confirmed or dropped status needs to check time requirement 
+CREATE OR REPLACE FUNCTION check_status()
+  RETURNS trigger AS 
+$BODY$
+	BEGIN
+		IF NEW.booking_status='dropped' THEN
+			 RETURN NEW;
+		END IF;
+		IF NEW.booking_status='confirmed' THEN
+			IF now()::timestamp<NEW.play_time+interval '10 minutes' and now()::timestamp>NEW.play_time-interval '20 minutes'
+			THEN
+			--status_change to confirmed 
+			RETURN NEW; 
+			ELSE RAISE NOTICE 'Confirmed time must be from 20 minutes before until 10 minutes after the hour';
+			END IF;
+		END IF;
+		RETURN NULL;
+	END;
+$BODY$
+	LANGUAGE plpgsql;	
+CREATE FUNCTION
+Time: 1.561 ms
+
+DROP TRIGGER IF EXISTS status_update4 ON reservation;
+DROP TRIGGER
+Time: 0.274 ms
+
+CREATE TRIGGER status_update4
+	BEFORE UPDATE ON reservation
+	FOR EACH ROW
+		EXECUTE PROCEDURE check_status();
+CREATE TRIGGER
+Time: 1.385 ms
+
+--auto change to dropped in a period
+UPDATE reservation
+SET booking_status='dropped' WHERE play_time>now()::timestamp+interval '10 minutes';
+UPDATE 0
+Time: 0.975 ms
+
+-- Procedure to add a reservation
+CREATE OR REPLACE FUNCTION add_reservation(booking_date TIMESTAMP,
+play_time TIMESTAMP,
+member_id INT,
+reserved_court INT)
+RETURNS void AS $$
+BEGIN
+INSERT INTO reservation(booking_date,play_time,member_id,reserved_court) VALUES(booking_date,play_time,member_id,reserved_court);
+END;
+$$ LANGUAGE plpgsql;
+CREATE FUNCTION
+Time: 1.527 ms
+
+--Procedure to update_reservation_status
+CREATE OR REPLACE FUNCTION update_reservation_status(confirmed_status VARCHAR
+,RID INT)
+RETURNS void AS $$
+BEGIN
+update reservation set booking_status=confirmed_status where RID=reservation_id;
+END;
+$$ LANGUAGE plpgsql;
+CREATE FUNCTION
+Time: 1.745 ms
+
+---list all reservations for a particular date (parameter)
+DROP FUNCTION list_all_reservation(date);
+DROP FUNCTION
+Time: 1.328 ms
+CREATE OR REPLACE FUNCTION list_all_reservation(chosen_date DATE)
+RETURNS TABLE(reservation_id INT,
+member_id INT,
+name VARCHAR,
+booking_date TIMESTAMP,
+play_time TIMESTAMP,
+COURT_ID INT,
+court_name VARCHAR,
+Confirmation_status VARCHAR ) AS $$
+BEGIN
+	RETURN QUERY
+	SELECT A.reservation_id,A.member_id, B.name,A.booking_date, A.play_time as time_when_play, C.court_id,C.court_name, A.booking_status as confirmation_status 
+	FROM reservation A,member B,court C 
+	WHERE B.member_id=A.member_id and C.court_id =A.reserved_court and A.play_time::date=chosen_date;
+END;
+$$ LANGUAGE plpgsql;
+CREATE FUNCTION
+Time: 2.165 ms
+--now()::date
+
+		
+
+		
+
+	
+
+		
+
+
+----crsdb-load-jzheng8.sql
+
+--DELETE FROM member;
+--member
+insert into member(name,gender,DOB)
+values ('Jason Martin', 'M',to_date('19960725','YYYYMMDD'));
+INSERT 0 1
+Time: 2.564 ms
+
+insert into member(name,gender,DOB)
+values ('James Smith', 'M',to_date('19781212','YYYYMMDD'));
+INSERT 0 1
+Time: 1.422 ms
+
+insert into member(name,gender,DOB)
+values ('Alison Mathews','M',to_date('19760321','YYYYMMDD') );
+INSERT 0 1
+Time: 1.361 ms
+
+insert into member(name,gender,DOB)
+values ('Celia Rice', 'F' ,  to_date('19821024','YYYYMMDD'));
+INSERT 0 1
+Time: 1.363 ms
+
+insert into member(name,gender,DOB)
+values ('Robert Black', 'M' ,  to_date('19840115','YYYYMMDD'));
+INSERT 0 1
+Time: 1.364 ms
+
+insert into member(name,gender,DOB)
+values ('Linda GREEN', 'F' ,  to_date('19870730','YYYYMMDD'));
+INSERT 0 1
+Time: 1.344 ms
+
+insert into member(name,gender,DOB)
+values ('Jasmine Rice', 'F' ,  to_date('19901231','YYYYMMDD'));
+INSERT 0 1
+Time: 1.529 ms
+
+insert into member(name,gender,DOB)
+values ('Morris Cat', 'F' ,  to_date('19921231','YYYYMMDD'));
+INSERT 0 1
+Time: 1.566 ms
+
+SELECT * From member;
++----------------+-----------+--------+------------+----------------+
+|      name      | member_id | gender |    dob     | penalty_points |
++----------------+-----------+--------+------------+----------------+
+| Jason Martin   |         1 | M      | 1996-07-25 |              0 |
+| James Smith    |         2 | M      | 1978-12-12 |              0 |
+| Alison Mathews |         3 | M      | 1976-03-21 |              0 |
+| Celia Rice     |         4 | F      | 1982-10-24 |              0 |
+| Robert Black   |         5 | M      | 1984-01-15 |              0 |
+| Linda GREEN    |         6 | F      | 1987-07-30 |              0 |
+| Jasmine Rice   |         7 | F      | 1990-12-31 |              0 |
+| Morris Cat     |         8 | F      | 1992-12-31 |              0 |
++----------------+-----------+--------+------------+----------------+
+(8 rows)
+
+Time: 0.298 ms
+
+
+--court
+insert into  court(court_location,court_name)
+values ('5795 Madison Street, Amsterdam, NY 12010','court rice');
+INSERT 0 1
+Time: 1.733 ms
+
+insert into  court(court_location,court_name)
+values ('6475 Route 5, Astoria, NY 11102','court sushi');
+INSERT 0 1
+Time: 1.249 ms
+
+insert into  court(court_location,court_name)
+values ('6532 Canal Street, Mebane, NC 27302','court curry');
+INSERT 0 1
+Time: 1.237 ms
+insert into  court(court_location,court_name)
+values ('3538 State Street, Encino, CA 91316','court ham');
+INSERT 0 1
+Time: 1.219 ms
+insert into  court(court_location,court_name)
+values ('781 Devon Road, Winter, Haven, FL 33880','court fruit');
+INSERT 0 1
+Time: 1.203 ms
+insert into  court(court_location,court_name)
+values ('6532 Canal Street, Mebane, NC 27302','court veggie');
+INSERT 0 1
+Time: 1.339 ms
+insert into  court(court_location,court_name)
+values ('4902 Woodland Avenu, Shakopee, MN 55379','court pizza');
+INSERT 0 1
+Time: 1.261 ms
+insert into  court(court_location,court_name)
+values ('998 2nd Street West,Smyrna, GA 30080','court meow');
+INSERT 0 1
+Time: 1.593 ms
+insert into  court(court_location,court_name)
+values ('6532 Canal Street, Mebane, NC 27302','court wurf');
+INSERT 0 1
+Time: 1.260 ms
+SELECT * From court;
++----------+------------------------------------------+--------------+
+| court_id |              court_location              |  court_name  |
++----------+------------------------------------------+--------------+
+|        1 | 5795 Madison Street, Amsterdam, NY 12010 | court rice   |
+|        2 | 6475 Route 5, Astoria, NY 11102          | court sushi  |
+|        3 | 6532 Canal Street, Mebane, NC 27302      | court curry  |
+|        4 | 3538 State Street, Encino, CA 91316      | court ham    |
+|        5 | 781 Devon Road, Winter, Haven, FL 33880  | court fruit  |
+|        6 | 6532 Canal Street, Mebane, NC 27302      | court veggie |
+|        7 | 4902 Woodland Avenu, Shakopee, MN 55379  | court pizza  |
+|        8 | 998 2nd Street West,Smyrna, GA 30080     | court meow   |
+|        9 | 6532 Canal Street, Mebane, NC 27302      | court wurf   |
++----------+------------------------------------------+--------------+
+(9 rows)
+
+Time: 0.260 ms
+--reservation
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 15:36:38', TIMESTAMP '2016-04-18 17:36:38', 3,2);
+INSERT 0 1
+Time: 5.994 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-17 16:36:38', TIMESTAMP '2016-04-18 15:36:38', 3,2);
+INSERT 0 1
+Time: 2.669 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 17:36:38', TIMESTAMP '2016-04-18 18:36:38', 3,5);
+INSERT 0 1
+Time: 3.105 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 18:36:38', TIMESTAMP '2016-04-20 15:36:38', 3,6);
+INSERT 0 1
+Time: 2.967 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 19:36:38', TIMESTAMP '2016-04-19 15:36:38', 4,1);
+INSERT 0 1
+Time: 2.636 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-20 17:36:38', TIMESTAMP '2016-04-26 15:36:38', 5,3);
+INSERT 0 1
+Time: 2.528 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-21 15:36:38', TIMESTAMP '2016-04-21 15:36:38', 1,4);
+INSERT 0 1
+Time: 2.367 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 12:36:38', TIMESTAMP '2016-04-18 15:36:38', 6,5);
+INSERT 0 1
+Time: 1.690 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-19 17:36:38', TIMESTAMP '2016-04-28 15:36:38', 2,1);
+INSERT 0 1
+Time: 1.578 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-18 15:36:38', TIMESTAMP '2016-04-29 15:36:38', 3,1);
+INSERT 0 1
+Time: 1.903 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-17 16:36:38', TIMESTAMP '2016-04-30 15:36:38', 4,3);
+INSERT 0 1
+Time: 1.525 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-16 14:36:38', TIMESTAMP '2016-04-22 15:36:38', 5,5);
+INSERT 0 1
+Time: 1.693 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-14 12:36:38', TIMESTAMP '2016-04-24 15:36:38', 6,6);
+INSERT 0 1
+Time: 2.029 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-15 14:36:38', TIMESTAMP '2016-04-18 21:36:38', 2,7);
+INSERT 0 1
+Time: 1.996 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-18 15:36:38', TIMESTAMP '2016-04-21 15:36:38', 1,8);
+INSERT 0 1
+Time: 1.690 ms
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-19 18:36:38', TIMESTAMP '2016-04-27 15:36:38', 1,4);
+INSERT 0 1
+Time: 1.507 ms
+
+--penatlty points change to 3 for member_id =3
+update member set penalty_points = 3 where member_id=3;
+UPDATE 1
+Time: 1.418 ms
+
+
+
+---crsdb-query-jzheng8.sql
+
+
+
+--a.List all of today's reservations (members, times, courts and confirmation status). This might be what the receptionist prints and posts every morning.
+--use stored_procedure values(now()::timestamp WITH TIME ZONE) (TO_CHAR(now()::timestamp WITH TIME ZONE,'MM/DD/YYYY'))
+--Assume database operate at rochester with Summer time
+SET TIMEZONE TO '-4';
+SET
+Time: 0.407 ms
+SELECT * FROM list_all_reservation(now()::date);
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+| reservation_id | member_id |      name      |    booking_date     |      play_time      | court_id | court_name  | confirmation_status |
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+|              1 |         3 | Alison Mathews | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |        2 | court sushi | accepted            |
+|              2 |         3 | Alison Mathews | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |        2 | court sushi | accepted            |
+|              3 |         3 | Alison Mathews | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |        5 | court fruit | accepted            |
+|              8 |         6 | Linda GREEN    | 2016-04-16 12:36:38 | 2016-04-18 15:36:38 |        5 | court fruit | accepted            |
+|             14 |         2 | James Smith    | 2016-04-15 14:36:38 | 2016-04-18 21:36:38 |        7 | court pizza | accepted            |
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+(5 rows)
+
+Time: 1.285 ms
+-- or using query
+SELECT A.member_id, B.name, A.play_time as time_when_play, C.court_id,C.court_name, A.booking_status as confirmation_status 
+FROM reservation A,member B,court C 
+WHERE B.member_id=A.member_id and C.court_id =A.reserved_court and TO_CHAR(A.play_time,'MM/DD/YYYY')=TO_CHAR(now()::date,'MM/DD/YYYY');
++-----------+----------------+---------------------+----------+-------------+---------------------+
+| member_id |      name      |   time_when_play    | court_id | court_name  | confirmation_status |
++-----------+----------------+---------------------+----------+-------------+---------------------+
+|         3 | Alison Mathews | 2016-04-18 17:36:38 |        2 | court sushi | accepted            |
+|         3 | Alison Mathews | 2016-04-18 15:36:38 |        2 | court sushi | accepted            |
+|         3 | Alison Mathews | 2016-04-18 18:36:38 |        5 | court fruit | accepted            |
+|         6 | Linda GREEN    | 2016-04-18 15:36:38 |        5 | court fruit | accepted            |
+|         2 | James Smith    | 2016-04-18 21:36:38 |        7 | court pizza | accepted            |
++-----------+----------------+---------------------+----------+-------------+---------------------+
+(5 rows)
+
+Time: 1.091 ms
+
+--b.Show all of member m's reservations (minimally 3; show times, courts and confirmation status) for the next 7 days. Include p: the current number of penalty points incurred by m (must be > 1 for member m).
+SELECT * FROM reservation A inner join member B on B.member_id=A.member_id 
+inner join court C on C.court_id =A.reserved_court WHERE A.member_id=3;
++----------------+---------------------+---------------------+-----------+----------------+----------------+----------------+-----------+--------+------------+----------------+----------+------------------------------------------+--------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |      name      | member_id | gender |    dob     | penalty_points | court_id |              court_location              |  court_name  |
++----------------+---------------------+---------------------+-----------+----------------+----------------+----------------+-----------+--------+------------+----------------+----------+------------------------------------------+--------------+
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 | Alison Mathews |         3 | M      | 1976-03-21 |              3 |        1 | 5795 Madison Street, Amsterdam, NY 12010 | court rice   |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 | Alison Mathews |         3 | M      | 1976-03-21 |              3 |        2 | 6475 Route 5, Astoria, NY 11102          | court sushi  |
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 | Alison Mathews |         3 | M      | 1976-03-21 |              3 |        2 | 6475 Route 5, Astoria, NY 11102          | court sushi  |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 | Alison Mathews |         3 | M      | 1976-03-21 |              3 |        5 | 781 Devon Road, Winter, Haven, FL 33880  | court fruit  |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 | Alison Mathews |         3 | M      | 1976-03-21 |              3 |        6 | 6532 Canal Street, Mebane, NC 27302      | court veggie |
++----------------+---------------------+---------------------+-----------+----------------+----------------+----------------+-----------+--------+------------+----------------+----------+------------------------------------------+--------------+
+(5 rows)
+
+Time: 0.643 ms
+
+
+
+--c.Add a reservation for member m for some court at some time t for n days from today, where n + p > 7. 
+
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-22 9:00:38',3,1);
+INSERT 0 1
+Time: 1.579 ms
+
+--Repeat with a different n such that n + p <= 7.
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-18 23:48:38',3,1);
+INSERT 0 1
+Time: 1.704 ms
+
+--or use stored procedure add_reservation
+SELECT add_reservation(TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-18 9:00:38',3,2);
++-----------------+
+| add_reservation |
++-----------------+
+|                 |
++-----------------+
+(1 row)
+
+Time: 1.832 ms
+
+
+SELECT add_reservation(TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-18 9:00:38',3,2);
++-----------------+
+| add_reservation |
++-----------------+
+|                 |
++-----------------+
+(1 row)
+
+Time: 1.714 ms
+
+
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-17 9:00:38',3,3);
+INSERT 0 1
+Time: 3.670 ms
+
+insert into  reservation(booking_date,play_time,member_id,reserved_court)
+values (TIMESTAMP '2016-04-15 15:36:38',TIMESTAMP '2016-04-16 9:00:38',3,4);
+INSERT 0 1
+Time: 1.656 ms
+
+
+--d.Confirm member m's next reservation.
+
+--previous view
+SELECT * From reservation WHERE member_id=3 ;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 |
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 |
+|             17 | 2016-04-15 15:36:38 | 2016-04-22 09:00:38 |         3 | unavailable    |              1 |
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | accepted       |              1 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             21 | 2016-04-15 15:36:38 | 2016-04-17 09:00:38 |         3 | accepted       |              3 |
+|             22 | 2016-04-15 15:36:38 | 2016-04-16 09:00:38 |         3 | accepted       |              4 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(11 rows)
+
+Time: 0.321 ms
+
+WITH B AS
+(SELECT reservation_id FROM reservation A 
+WHERE A.member_id=3 and A.play_time>now()::timestamp and A.booking_status='accepted'
+order by (A.play_time-now()::timestamp)limit 1)
+update reservation set booking_status='confirmed' FROM B 
+where reservation.member_id=3 and reservation.reservation_id=B.reservation_id and B.reservation_id IS NOT NULL ;
+UPDATE 1
+Time: 4.489 ms
+--doesnot work since  Confirmed time must be from 20 minutes before until 10 minutes after the hour.
+--try another one
+
+--view after update
+SELECT * From reservation WHERE member_id=3 ;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 |
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 |
+|             17 | 2016-04-15 15:36:38 | 2016-04-22 09:00:38 |         3 | unavailable    |              1 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             21 | 2016-04-15 15:36:38 | 2016-04-17 09:00:38 |         3 | accepted       |              3 |
+|             22 | 2016-04-15 15:36:38 | 2016-04-16 09:00:38 |         3 | accepted       |              4 |
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(11 rows)
+
+Time: 0.322 ms
+
+
+--e.Cancel one of member m's upcoming reservations.
+
+--previous view
+SELECT * From reservation WHERE member_id=3 ;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 |
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 |
+|             17 | 2016-04-15 15:36:38 | 2016-04-22 09:00:38 |         3 | unavailable    |              1 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             21 | 2016-04-15 15:36:38 | 2016-04-17 09:00:38 |         3 | accepted       |              3 |
+|             22 | 2016-04-15 15:36:38 | 2016-04-16 09:00:38 |         3 | accepted       |              4 |
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(11 rows)
+
+Time: 0.308 ms
+WITH B AS
+(SELECT reservation_id FROM reservation A 
+WHERE A.member_id=3 and A.play_time>now()::timestamp and A.booking_status='accepted'
+order by (A.play_time-now()::timestamp)limit 1)
+update reservation set booking_status='cancelled' FROM B 
+where reservation.member_id=3 and reservation.reservation_id=B.reservation_id and B.reservation_id IS NOT NULL ;
+UPDATE 0
+Time: 1.946 ms
+--view after update
+SELECT * From reservation WHERE member_id=3;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 |
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 |
+|             17 | 2016-04-15 15:36:38 | 2016-04-22 09:00:38 |         3 | unavailable    |              1 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             21 | 2016-04-15 15:36:38 | 2016-04-17 09:00:38 |         3 | accepted       |              3 |
+|             22 | 2016-04-15 15:36:38 | 2016-04-16 09:00:38 |         3 | accepted       |              4 |
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(11 rows)
+
+Time: 0.354 ms
+
+--f.Show all of m's reservations again, as before.
+SELECT * From reservation WHERE member_id=3;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|              3 | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |         3 | accepted       |              5 |
+|              4 | 2016-04-16 18:36:38 | 2016-04-20 15:36:38 |         3 | accepted       |              6 |
+|             10 | 2016-04-18 15:36:38 | 2016-04-29 15:36:38 |         3 | unavailable    |              1 |
+|             17 | 2016-04-15 15:36:38 | 2016-04-22 09:00:38 |         3 | unavailable    |              1 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             21 | 2016-04-15 15:36:38 | 2016-04-17 09:00:38 |         3 | accepted       |              3 |
+|             22 | 2016-04-15 15:36:38 | 2016-04-16 09:00:38 |         3 | accepted       |              4 |
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(11 rows)
+
+Time: 0.315 ms
+
+--g.Add any additional queries and commands you deem appropriate to show off the effectiveness of your constraints.
+--I build several triggers. Before insert column into Table resevation, the system will check the available court
+--if availabe, it will automatically change the booking status to 'accepted'
+--if not avalabe, may becuase the date is far way from n -penalty points, it will automatically change the booking status to 'unavailable'
+
+--Also every time update the status, the corresponding Table court schedule will delete or insert.
+--For example,I update booking status of the reseavtion id = 5 tp 'dropped'
+--1.
+--previous view
+SELECT * FROM court_schedule;
++----------+---------------------+-----+
+| court_id |      time_slot      | rid |
++----------+---------------------+-----+
+|        2 | 2016-04-18 17:36:38 |   1 |
+|        5 | 2016-04-18 18:36:38 |   3 |
+|        6 | 2016-04-20 15:36:38 |   4 |
+|        1 | 2016-04-19 15:36:38 |   5 |
+|        4 | 2016-04-21 15:36:38 |   7 |
+|        7 | 2016-04-18 21:36:38 |  14 |
+|        3 | 2016-04-17 09:00:38 |  21 |
++----------+---------------------+-----+
+(7 rows)
+
+Time: 0.233 ms
+--updating
+update reservation set booking_status='dropped' where reservation_id=5;
+UPDATE 1
+Time: 4.690 ms
+--view after update
+SELECT * FROM court_schedule;
++----------+---------------------+-----+
+| court_id |      time_slot      | rid |
++----------+---------------------+-----+
+|        2 | 2016-04-18 17:36:38 |   1 |
+|        5 | 2016-04-18 18:36:38 |   3 |
+|        6 | 2016-04-20 15:36:38 |   4 |
+|        4 | 2016-04-21 15:36:38 |   7 |
+|        7 | 2016-04-18 21:36:38 |  14 |
+|        3 | 2016-04-17 09:00:38 |  21 |
++----------+---------------------+-----+
+(6 rows)
+
+Time: 0.228 ms
+
+--2.DROP member on casacde
+--I drop the member_id=2 in member 
+--the resevation correlating to member_id=2 is also dropped. 
+SELECT A.member_id FROM reservation A WHERE A.member_id=2 ;
++-----------+
+| member_id |
++-----------+
+|         2 |
+|         2 |
++-----------+
+(2 rows)
+
+Time: 0.235 ms
+
+DELETE From member WHERE member.member_id=2;
+DELETE 1
+Time: 2.228 ms
+
+SELECT A.member_id FROM reservation A WHERE A.member_id=2 ;
++-----------+
+| member_id |
++-----------+
++-----------+
+(0 rows)
+
+Time: 0.229 ms
+
+--3.file definitions of stored procedures (in any language supported by PostgreSQL, preferably plpgsql) for listing all reservations for a particular date (parameter)
+--i have already show the results in a. I will show here again.
+SET TIMEZONE TO '-4';
+SET
+Time: 0.120 ms
+SELECT * FROM list_all_reservation(now()::date);
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+| reservation_id | member_id |      name      |    booking_date     |      play_time      | court_id | court_name  | confirmation_status |
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+|             18 |         3 | Alison Mathews | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |        1 | court rice  | confirmed           |
+|              1 |         3 | Alison Mathews | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |        2 | court sushi | accepted            |
+|              2 |         3 | Alison Mathews | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |        2 | court sushi | accepted            |
+|             19 |         3 | Alison Mathews | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |        2 | court sushi | accepted            |
+|             20 |         3 | Alison Mathews | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |        2 | court sushi | accepted            |
+|              3 |         3 | Alison Mathews | 2016-04-16 17:36:38 | 2016-04-18 18:36:38 |        5 | court fruit | accepted            |
+|              8 |         6 | Linda GREEN    | 2016-04-16 12:36:38 | 2016-04-18 15:36:38 |        5 | court fruit | accepted            |
++----------------+-----------+----------------+---------------------+---------------------+----------+-------------+---------------------+
+(7 rows)
+
+Time: 0.792 ms
+--4.for making a reservation for a member on a particular date and time (parameters)
+--i have already show the results in c. I will show here again.
+-- use stored procedure add_reservation
+--before
+SELECT * FROM reservation where member_id=3 and reserved_court=2;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(4 rows)
+
+Time: 0.312 ms
+SELECT add_reservation(TIMESTAMP '2016-04-17 15:36:38',TIMESTAMP '2016-04-18 23:45:38',3,2);
++-----------------+
+| add_reservation |
++-----------------+
+|                 |
++-----------------+
+(1 row)
+
+Time: 1.884 ms
+--after
+SELECT * FROM reservation where member_id=3 and reserved_court=2;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|              1 | 2016-04-16 15:36:38 | 2016-04-18 17:36:38 |         3 | accepted       |              2 |
+|              2 | 2016-04-17 16:36:38 | 2016-04-18 15:36:38 |         3 | accepted       |              2 |
+|             19 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             20 | 2016-04-15 15:36:38 | 2016-04-18 09:00:38 |         3 | accepted       |              2 |
+|             23 | 2016-04-17 15:36:38 | 2016-04-18 23:45:38 |         3 | accepted       |              2 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(5 rows)
+
+Time: 0.335 ms
+--5. and for confirming and canceling a reservation (with appropriate parameters). 
+-- use stored procedure update_reservation_status.
+SELECT * FROM reservation where reservation_id=18;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(1 row)
+
+Time: 0.286 ms
+SELECT update_reservation_status('pending',18);
++---------------------------+
+| update_reservation_status |
++---------------------------+
+|                           |
++---------------------------+
+(1 row)
+
+Time: 1.596 ms
+SELECT * FROM reservation where reservation_id=18;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | pending        |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(1 row)
+
+Time: 0.273 ms
+SELECT update_reservation_status('confirmed',18);
++---------------------------+
+| update_reservation_status |
++---------------------------+
+|                           |
++---------------------------+
+(1 row)
+
+Time: 2.171 ms
+SELECT * FROM reservation where reservation_id=18;
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+| reservation_id |    booking_date     |      play_time      | member_id | booking_status | reserved_court |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+|             18 | 2016-04-15 15:36:38 | 2016-04-18 23:48:38 |         3 | confirmed      |              1 |
++----------------+---------------------+---------------------+-----------+----------------+----------------+
+(1 row)
+
+Time: 0.274 ms
