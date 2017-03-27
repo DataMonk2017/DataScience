@@ -15,5 +15,7 @@ class Solution(object):
             else:
                 L.append(str(i))
         return L
-                
-                  
+        #shorten way
+        return ['FizzBuzz'[i%-3&-4:i%-5&8^12]or`i`for i in range(1,n+1)]
+        #cleaner way
+        return ['Fizz'*(not i%3)+'Buzz'*(not i%5) or str(i) for i in range(1,n+1)]
