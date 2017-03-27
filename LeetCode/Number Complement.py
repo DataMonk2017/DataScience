@@ -16,7 +16,13 @@ class Solution(object):
         :rtype: int
         """
         return int(''.join(['1' if i=='0' else '0' for i in bin(num)[2:]]),2)
-        
+    
+class Solution(object):
+    def findComplement(self, num):
+        i = 1
+        while i <= num:
+            i <<= 1
+        return (i-1)^num        
         
 #Solution From BetaGoGo
 #Flip bit by bit.
