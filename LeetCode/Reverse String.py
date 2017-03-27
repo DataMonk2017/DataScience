@@ -19,5 +19,5 @@ class Solution(object):
         
         #pythonic way
         return ''.join([s[-(i+1)] for i in range(len(s))])
-        #second way
+        #second way: Extened Slices
         return s[::-1]
