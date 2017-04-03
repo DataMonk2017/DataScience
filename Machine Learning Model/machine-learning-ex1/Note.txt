@@ -1,0 +1,1 @@
+After Feature scaling and mean normalization, we should do the same process on the X when we try to use x to predict Y. 
