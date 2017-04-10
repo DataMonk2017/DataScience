@@ -1,1 +1,7 @@
 After Feature scaling and mean normalization, we should do the same process on the X when we try to use x to predict Y. 
+
+
+When build prediction function for logistic regression, sigmoid should be used in the function.
+for example,
+p = sigmoid(X*theta)>=threshold
+The reason behind this is we map X*theta fucntion to make y in [0,1]. So when predicting, we need to compare the P with threshold rather than use X*theta directly.
