@@ -1,0 +1,60 @@
+——————————————————————————————
+Programming HW 7: EM Mixture of Gaussians
+——————————————————————————————
+Homework:
+
+The objective of the homework was to implement EM fitting of a mixture of gaussians on a two-dimensional dataset using Python. 
+
+——————————————————————————————
+Files:
+
+hw7.py		-Contains EM Gaussian Mixture procedures and call method,including graphing procedure
+
+
+	
+
+(The graphing procedure uses the matplotlib python library, which does not work on the cycle machines. 
+——————————————————————————————
+Algorithm:
+
+The mix.py file contains all of the procedures for the EM mixture of gaussians model. 
+
+Once this initialization is complete, the program enters an iteration procedure over the E-step and the M-step. The program terminates this procedure when the log likelihood of the result is seen have converged.
+
+	
+E-Step:
+
+The E-step does the same calculations as explained in class.
+
+	
+M-Step:
+
+All formulate come from notes sectcion 17. mixture of Gussian.
+	
+
+Log Likelihood:
+
+
+The log likelihood value is calculated as follows:
+ln(p(X|mu,sigma,lambda) = ( from 1 to N sum(ln( from 1 to k sum(( from 1 to k sum(lambda[j] * N(X(n)|mu(j),sigma(j)) ) )) )) )
+
+——————————————————————————————
+Instructions: (Run the following command in terminal).
+
+The second command line argument should be file name.
+The second command line argument should be either ‘tied’ or ‘separate’ indicating what kind of covariance matrices you would like to be used. 
+The thrid command line argument should be an integer value indicating how many gaussians you would like to have in your mixture.
+For instance:
+
+python hw7.py points.dat tied 10
+(This will run the program on a ‘tied’ covariance matrix, for a mixture of 10 gaussians).
+
+python hw7.py points.dat separate 5
+(This will run the program on ‘separate’ covariance matrices, for a mixture of 5 gaussians).
+
+——————————————————————————————
+Output: 
+
+performace plot for train set 
+
+performace plot for test set
