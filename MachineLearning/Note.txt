@@ -5,3 +5,25 @@ When build prediction function for logistic regression, sigmoid should be used i
 for example,
 p = sigmoid(X*theta)>=threshold
 The reason behind this is we map X*theta fucntion to make y in [0,1]. So when predicting, we need to compare the P with threshold rather than use X*theta directly.
+
+
+
+
+
+
+
+No matter what algorithms we use, we need to make sure we do not violate the assumpition so hard. Every Algorithms have drawbacks and limitions (No Free Lunch Theorem: "When averaged across all possible situations, every algorithm performs equally well."). We should be aware of that. That's kind of telling why data visulization is so important in Data Mining process.
+
+For example, we are using linear regression. If those assumptions are broken, you can still minimize the SSE, but it might not do anything. Imagine saying "You drive a car by pushing the pedal: driving is essentially a 'pedal-pushing process.' The pedal can be pushed no matter how much gas in the tank. Therefore, even if the tank is empty, you can still push the pedal and drive the car."
+
+Here below some readings which are good to read:
+
+1 . How to understand the drawbacks of K-means: https://stats.stackexchange.com/questions/133656/how-to-understand-the-drawbacks-of-k-means
+
+If you don't want to read such a long, verbose paper, here is the brief summary:
+K- Means is not working well in the follwing cases:
+  Broken Assumption: Non-Spherical Data
+  Broken Assumption: Unevenly Sized Clusters
+  Clustering non-clustered data
+  Sensitive to scale
+  Means are continuous
