@@ -134,3 +134,44 @@ from Logs l1
     join Logs l2 on l1.id=l2.id-1 
     join Logs l3 on l1.id=l3.id-2
 where l1.Num=l2.Num and l2.Num=l3.Num
+
+
+#################
+#Employees Earning More Than Their Managers
+#################
+SELECT e1.Name as Employee FROM Employee e1, Employee e2 where e1.ManagerId = e2.Id and e1.Salary > e2.Salary
+
+#################
+#Duplicate Emails
+#################
+SELECT Email from Person GROUP BY Email having count(Email)>1
+
+################
+#Customers Who Never Order
+################
+#selec all row with null customerid in joined table
+Select  a.Name
+FROM Customers a left join Orders b 
+on a.Id = b.CustomerId
+WHERE b.CustomerId is NULL
+
+#not in the order list
+SELECT Name as Customers FROM Customers WHERE Id not in (Select DISTINCT CustomerId  FROM Orders b)  
+
+SELECT A.Name from Customers A
+WHERE NOT EXISTS (SELECT 1 FROM Orders B WHERE A.Id = B.CustomerId)
+
+select c.Name from Customers c
+where (select count(*) from Orders o where o.customerId=c.id)=0
+
+
+#####################
+#Delete Duplicate Emails
+#####################
+1.simple way
+DELETE p from Person p, Person q where p.Id>q.Id AND q.Email=p.Email 
+2. Select update 
+DELETE FROM Person 
+WHERE Id not in 
+(SELECT c.Id FROM
+(SELECT min(Id) as Id FROM Person GROUP BY Email ) c)
