@@ -167,19 +167,45 @@ where (select count(*) from Orders o where o.customerId=c.id)=0
 ####################
 #Department Highest Salary
 ####################
+1.
 SELECT D.Name AS Department ,E.Name AS Employee ,E.Salary 
 from 
 	Employee E,
 	Department D 
 WHERE E.DepartmentId = D.id 
   AND (DepartmentId,Salary) in 
-  (SELECT DepartmentId,max(Salary) as max FROM Employee GROUP BY DepartmentId)
+  (SELECT DepartmentId,max(Salary) FROM Employee GROUP BY DepartmentId)
+
+2.
+SELECT D.Name AS Department ,E.Name AS Employee ,E.Salary 
+FROM
+	Employee E,
+	(SELECT DepartmentId,max(Salary) as max FROM Employee GROUP BY DepartmentId) T,
+	Department D
+WHERE E.DepartmentId = T.DepartmentId 
+  AND E.Salary = T.max
+  AND E.DepartmentId = D.id
+
+3.
+SELECT D.Name,A.Name,A.Salary 
+FROM 
+	Employee A,
+	Department D   
+WHERE A.DepartmentId = D.Id 
+  AND NOT EXISTS 
+  (SELECT 1 FROM Employee B WHERE B.Salary > A.Salary AND A.DepartmentId = B.DepartmentId) 
+ 
+ 4.
+ SELECT dep.Name as Department, emp.Name as Employee, emp.Salary 
+from Department dep, Employee emp 
+where emp.DepartmentId=dep.Id 
+and emp.Salary=(Select max(Salary) from Employee e2 where e2.DepartmentId=dep.Id)
 
 ####################
 #Department Top Three Salaries
 ####################
 Select B.Name as Department,A.Name as Employee,Salary
-From Employee as A inner join Department as B on A.DepartmentId =B.ID 
+From Employee as A inner join Department as B on A.DepartmentId = B.ID 
 where (Select Count(Distinct(Salary)) From Employee as C where C.Salary>A.Salary and A.DepartmentId = C.DepartmentId )<3
 order by Department,Employee,Salary
 
@@ -194,3 +220,30 @@ DELETE FROM Person
 WHERE Id not in 
 (SELECT c.Id FROM
 (SELECT min(Id) as Id FROM Person GROUP BY Email ) c)
+
+####################
+#Big Countries
+####################
+SELECT name, population, area FROM World WHERE population > 25000000 or area > 3000000
+
+###################
+#rising temperature
+###################
+SELECT w2.Id from Weather w1 join Weather w2 on TO_DAYS(w1.Date) = TO_DAYS(w2.Date)-1 and w1.Temperature < w2.Temperature 
+
+###################
+#Cancelation Rate
+###################
+select 
+t.Request_at Day, 
+round(sum(case when t.Status like 'cancelled_%' then 1 else 0 end)/count(*),2) 'Cancellation Rate'
+from Trips t 
+inner join Users u 
+on t.Client_Id = u.Users_Id and u.Banned='No'
+where t.Request_at between '2013-10-01' and '2013-10-03'
+group by t.Request_at
+
+SELECT t.Request_at as Day, round(sum(if(status != 'completed', 1, 0)) / sum(1), 2) 'Cancellation Rate'
+FROM Trips t 
+inner join Users u
+on u.Users_Id = t.Client_Id and u.Banned='No' and t.Request_at between '2013-10-01' and '2013-10-03' GROUP BY t.Request_at
