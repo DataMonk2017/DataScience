@@ -164,6 +164,25 @@ WHERE NOT EXISTS (SELECT 1 FROM Orders B WHERE A.Id = B.CustomerId)
 select c.Name from Customers c
 where (select count(*) from Orders o where o.customerId=c.id)=0
 
+####################
+#Department Highest Salary
+####################
+SELECT D.Name AS Department ,E.Name AS Employee ,E.Salary 
+from 
+	Employee E,
+	Department D 
+WHERE E.DepartmentId = D.id 
+  AND (DepartmentId,Salary) in 
+  (SELECT DepartmentId,max(Salary) as max FROM Employee GROUP BY DepartmentId)
+
+####################
+#Department Top Three Salaries
+####################
+Select B.Name as Department,A.Name as Employee,Salary
+From Employee as A inner join Department as B on A.DepartmentId =B.ID 
+where (Select Count(Distinct(Salary)) From Employee as C where C.Salary>A.Salary and A.DepartmentId = C.DepartmentId )<3
+order by Department,Employee,Salary
+
 
 #####################
 #Delete Duplicate Emails
