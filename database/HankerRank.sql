@@ -92,3 +92,39 @@ FROM
 WHERE Start_Date < End_Date
 GROUP BY Start_Date 
 ORDER BY min(End_Date) - Start_Date, Start_Date
+
+#Placements
+#MS SQL Server
+WITH CTE AS ( SELECT F.ID , 
+            N1.Name as SN, 
+            N2.Name as FN, 
+            P1.Salary as ISal,
+            P2.Salary as FSal, 
+            F.Friend_ID 
+      FROM FRIENDS F JOIN PACKAGES P1 
+            ON P1.ID = F.ID
+           Join Packages P2 
+           ON P2.ID = F.Friend_ID
+      JOIN Students N1
+      ON N1.ID = F.ID
+           Join Students N2 
+           ON N2.ID = F.Friend_ID)
+SELECT SN
+FROM CTE
+
+#MYSQL
+SELECT SN
+FROM (
+SELECT F.ID , 
+       N1.Name as SN, 
+       P1.Salary as ISal,
+       P2.Salary as FSal, 
+       F.Friend_ID 
+        FROM FRIENDS F JOIN PACKAGES P1 
+           ON P1.ID = F.ID
+           Join Packages P2 
+           ON P2.ID = F.Friend_ID
+      JOIN Students N1
+      ON N1.ID = F.ID) CTE
+WHERE FSal>ISal order by FSal
+WHERE FSal>ISal order by FSal
