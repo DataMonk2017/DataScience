@@ -111,6 +111,7 @@ WITH CTE AS ( SELECT F.ID ,
            ON N2.ID = F.Friend_ID)
 SELECT SN
 FROM CTE
+WHERE FSal>ISal order by FSal
 
 #MYSQL
 SELECT SN
@@ -127,4 +128,63 @@ SELECT F.ID ,
       JOIN Students N1
       ON N1.ID = F.ID) CTE
 WHERE FSal>ISal order by FSal
-WHERE FSal>ISal order by FSal
+
+
+#Symmetric Pairs
+SELECT * FROM
+((SELECT X,Y FROM Functions WHERE (X,Y) in (SELECT Y,X FROM Functions ) and X<Y) 
+Union 
+(SELECT X,Y FROM Functions WHERE X=Y Group by X,Y Having Count(*)>1 )) c
+ORDER BY X
+
+#Interviews
+#varaition1
+SELECT e.contest_id, 
+    e.hacker_id, 
+    e.name, 
+    sum(ts),
+    sum(tas),
+    sum(tv),
+    sum(tuv)
+From
+    Contests e
+    JOIN Colleges a  ON a.contest_id = e.contest_id
+    JOIN Challenges b ON a.college_id = b.college_id
+    LEFT JOIN (SELECT challenge_id,
+                      sum(total_views) as tv,
+                      sum(total_unique_views) as tuv 
+               FROM View_Stats 
+               group by challenge_id) c
+    ON b.challenge_id = c.challenge_id
+    LEFT JOIN (SELECT challenge_id,
+                    sum(total_submissions) as ts, 
+                    sum(total_accepted_submissions) as tas
+               FROM  Submission_Stats 
+               group by challenge_id) d
+    ON d.challenge_id = b.challenge_id
+GROUP BY e.contest_id, e.hacker_id, e.name
+order by contest_id
+#varaition2
+SELECT a.contest_id, 
+    e.hacker_id, 
+    e.name,
+    sum(ts),
+    sum(tas),
+    sum(tv),
+    sum(tuv)
+From
+    Colleges a 
+    JOIN Challenges b ON a.college_id = b.college_id
+    JOIN Contests e ON a.contest_id = e.contest_id
+    LEFT JOIN (SELECT challenge_id,
+          sum(total_views) as tv,
+          sum(total_unique_views) as tuv 
+          FROM View_Stats group by challenge_id) c
+    ON b.challenge_id = c.challenge_id
+    LEFT JOIN (SELECT challenge_id,
+          sum(total_submissions) as ts, 
+          sum(total_accepted_submissions) as tas
+          FROM  Submission_Stats group by challenge_id) d
+    ON d.challenge_id = b.challenge_id
+GROUP BY a.contest_id, e.hacker_id, e.name
+order by contest_id
