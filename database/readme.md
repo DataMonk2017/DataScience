@@ -1,6 +1,21 @@
 Database is a fodler that contains all SQL codes I practise.
 
 
+
+They're used in different places.  group by modifies the entire query, like:
+
+select customerId, count(*) as orderCount
+from Orders
+group by customerId
+But partition by just works on a window function, like row_number:
+
+select row_number() over (partition by customerId order by orderId)
+    as OrderNumberForThisCustomer
+from Orders
+A group by normally reduces the number of rows returned by rolling them up and calculating averages or sums for each row.  partition by does not affect the number of rows returned, but it changes how a window function's result is calculated.
+
+
+
 We can take a simple example
 
 we have a table named TableA with the following values .
