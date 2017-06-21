@@ -61,7 +61,7 @@ select SUM(Mark) OVER (PARTITION BY id) AS marksum, firstname from TableA
 result :
 
 marksum | firstname 
--------------------
+--------|-----------
 134     |arun                     
 134     |arun                     
 134     |arun                     
@@ -69,4 +69,5 @@ marksum | firstname
 94      |ann                      
 41      |sruthy                   
 47      |new  
+
 look at the results it will partition the rows and results all rows not like group by.
