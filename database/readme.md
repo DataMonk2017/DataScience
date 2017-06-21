@@ -38,7 +38,8 @@ marksum | firstname
 94      |ann                      
 134     |arun                     
 47      |new                      
-41      |sruthy   
+41      |sruthy 
+
 In our real table we have 7 rows and when we apply group by id, the server group the results based on id
 
 In simple words
