@@ -5,15 +5,15 @@ We can take a simple example
 
 we have a table named TableA with the following values .
 
-id  firstname                   lastname                    Mark
--------------------------------------------------------------------
-1   arun                        prasanth                    40
-2   ann                         antony                      45
-3   sruthy                      abc                         41
-6   new                         abc                         47
-1   arun                        prasanth                    45
-1   arun                        prasanth                    49
-2   ann                         antony                      49
+id | firstname     |              lastname        |            Mark
+---|---------------|------------------------------|-----------------
+1  | arun          |              prasanth        |            40
+2  | ann           |              antony          |            45
+3  | sruthy        |              abc             |            41
+6  | new           |              abc             |            47
+1  | arun          |              prasanth        |            45
+1  | arun          |              prasanth        |            49
+2  | ann           |              antony          |           49
 Group By
 
 The SQL GROUP BY clause can be used in a SELECT statement to collect data across multiple records and group the results by one or more columns.
