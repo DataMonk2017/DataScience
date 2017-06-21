@@ -13,7 +13,8 @@ id | firstname     |              lastname        |            
 6  | new           |              abc             |            47
 1  | arun          |              prasanth        |            45
 1  | arun          |              prasanth        |            49
-2  | ann           |              antony          |           49
+2  | ann           |              antony          |            49
+
 Group By
 
 The SQL GROUP BY clause can be used in a SELECT statement to collect data across multiple records and group the results by one or more columns.
@@ -32,12 +33,12 @@ select SUM(Mark)marksum,firstname from TableA
 group by id,firstName
 Results :
 
-marksum  firstname
-----------------
-94      ann                      
-134     arun                     
-47      new                      
-41      sruthy   
+marksum | firstname
+--------|--------
+94      |ann                      
+134     |arun                     
+47      |new                      
+41      |sruthy   
 In our real table we have 7 rows and when we apply group by id, the server group the results based on id
 
 In simple words
@@ -59,13 +60,13 @@ we can apply partition by in our example table
 select SUM(Mark) OVER (PARTITION BY id) AS marksum, firstname from TableA
 result :
 
-marksum firstname 
+marksum | firstname 
 -------------------
-134     arun                     
-134     arun                     
-134     arun                     
-94      ann                      
-94      ann                      
-41      sruthy                   
-47      new  
+134     |arun                     
+134     |arun                     
+134     |arun                     
+94      |ann                      
+94      |ann                      
+41      |sruthy                   
+47      |new  
 look at the results it will partition the rows and results all rows not like group by.
